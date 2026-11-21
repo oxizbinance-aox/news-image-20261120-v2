@@ -1,561 +1,518 @@
 #!/usr/bin/env python3
-"""Draw entry.png for make.fun news-image-20261120 (v2 re-push).
+"""Render the one-page world-news summary for Friday 20 November 2026.
 
-One image summing up the world news of Friday 20 November 2026:
-35 verified stories across 7 regions, drawn entirely in code with PIL.
-No photos, no copied artwork.
-
-Layout (1024x1024):
-  - navy header: date + "35 STORIES · 7 REGIONS"
-  - 6 hero cards (3x2) with drawn pictograms
-  - 29 compact items in 3 columns, each with a drawn mini-icon,
-    a colour-coded region tag, a headline and one factual detail line
-
-Every story was verified against at least two independent sources
-(full source list in README.md). Events that happened on 19 Nov were
-excluded even when reported on 20 Nov.
+The picture is painted entirely with Pillow primitives: a dark masthead,
+six large feature cards, twenty-nine small entries arranged in three
+columns, tiny hand-drawn pictograms, and a footer that names the sources.
+Nothing photographic is used anywhere.
 """
-
-import math
-import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-W = H = 1024
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.png")
+import os
 
-# ---------------------------------------------------------------- fonts
-def find_font(names):
-    for p in names:
-        if os.path.exists(p):
-            return p
-    raise FileNotFoundError("none of %r found" % (names,))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TARGET_PNG = os.path.join(BASE_DIR, "entry.png")
 
+IMG_W = 1024
+IMG_H = 1024
+SIDE = 28
+COL_GAP = 16
 
-ANTON = find_font([
-    "/home/hatch/.fonts/Anton-Regular.ttf",
-    "/usr/share/fonts/truetype/anton/Anton-Regular.ttf",
-])
-NOTO_BOLD = find_font([
-    "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-])
-NOTO = find_font([
-    "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-])
+FONT_FOLDER = "/usr/share/fonts/truetype/dejavu"
 
+NAVY = (15, 36, 64)
+GOLD = (201, 162, 39)
+RED = (210, 59, 44)
+CREAM = (246, 240, 225)
+WHITE = (255, 255, 255)
+INK = (22, 30, 40)
+GRAY = (96, 102, 110)
+EDGE = (226, 220, 205)
+HOT = (230, 126, 34)  # flame orange accent
 
-def font(path, size):
-    return ImageFont.truetype(path, size)
-
-
-# ---------------------------------------------------------------- palette
-PAPER = (245, 241, 232)
-INK = (26, 32, 44)
-SUB = (68, 64, 58)
-NAVY = (16, 35, 63)
-GOLD = (212, 172, 13)
-CARD = (255, 255, 255)
-CARD_EDGE = (217, 210, 194)
-
-# region -> (label, colour, tint)
 REGIONS = {
-    "EU":    ("EUROPE",        (176, 58, 46),  (253, 237, 236)),
-    "NA":    ("N. AMERICA",    (26, 82, 118),  (235, 245, 251)),
-    "LATAM": ("LATIN AMERICA", (17, 120, 100), (234, 250, 241)),
-    "ASIA":  ("ASIA",          (108, 52, 131), (244, 236, 247)),
-    "ME":    ("MIDDLE EAST",   (147, 81, 22),  (253, 242, 233)),
-    "AFR":   ("AFRICA",        (185, 119, 14), (254, 245, 231)),
-    "GLOB":  ("GLOBAL",        (44, 62, 80),   (234, 236, 239)),
+    "EUROPE": {"code": "EU", "color": (192, 57, 43)},
+    "N. AMERICA": {"code": "NA", "color": (31, 58, 100)},
+    "LATIN AMERICA": {"code": "LA", "color": (30, 138, 110)},
+    "ASIA": {"code": "AS", "color": (125, 60, 152)},
+    "MIDDLE EAST": {"code": "ME", "color": (140, 108, 58)},
+    "AFRICA": {"code": "AF", "color": (214, 137, 16)},
+    "GLOBAL": {"code": "GL", "color": (52, 73, 94)},
 }
+REGION_ORDER = ["EUROPE", "N. AMERICA", "LATIN AMERICA", "ASIA",
+                "MIDDLE EAST", "AFRICA", "GLOBAL"]
+
+# pictogram kind -> (ink color, disc tint)
+STYLE = {
+    "missile": ((192, 57, 43), (250, 229, 224)),
+    "chart": ((31, 58, 100), (230, 237, 244)),
+    "bitcoin": ((224, 122, 26), (252, 236, 205)),
+    "probe": ((93, 109, 126), (236, 236, 240)),
+    "seismo": ((30, 138, 110), (222, 241, 235)),
+    "document": ((36, 113, 163), (226, 237, 248)),
+    "shield": ((36, 113, 163), (226, 237, 248)),
+    "flag": ((192, 57, 43), (250, 229, 224)),
+    "leaf": ((34, 153, 84), (222, 241, 230)),
+    "chip": ((31, 58, 100), (230, 237, 244)),
+    "mic": ((44, 62, 80), (236, 236, 240)),
+    "ballot": ((34, 153, 84), (222, 241, 230)),
+    "flame": ((230, 126, 34), (252, 232, 205)),
+    "pill": ((192, 57, 43), (250, 230, 236)),
+    "scales": ((44, 62, 80), (236, 236, 240)),
+    "rocket": ((192, 57, 43), (250, 229, 224)),
+    "basketball": ((230, 126, 34), (252, 232, 205)),
+    "building": ((52, 73, 94), (230, 237, 244)),
+    "plane": ((36, 113, 163), (226, 237, 248)),
+    "bottle": ((30, 138, 110), (222, 241, 235)),
+    "gamepad": ((44, 62, 80), (236, 236, 240)),
+    "gem": ((176, 132, 16), (252, 240, 205)),
+    "coin": ((176, 132, 16), (252, 236, 205)),
+}
+
+
+def load_font(name, size):
+    return ImageFont.truetype(os.path.join(FONT_FOLDER, name), size)
+
+
+F_TITLE = load_font("DejaVuSans-Bold.ttf", 62)
+F_KICK = load_font("DejaVuSans-Bold.ttf", 20)
+F_PILL = load_font("DejaVuSans-Bold.ttf", 20)
+F_STATS = load_font("DejaVuSans-Bold.ttf", 20)
+F_REGION = load_font("DejaVuSans-Bold.ttf", 13)
+F_HERO_HEAD = load_font("DejaVuSans-Bold.ttf", 20)
+F_HERO_DET = load_font("DejaVuSans.ttf", 13)
+F_SECTION = load_font("DejaVuSans-Bold.ttf", 20)
+F_LEGEND = load_font("DejaVuSans-Bold.ttf", 9)
+F_CHIP = load_font("DejaVuSans-Bold.ttf", 11)
+F_ITEM_HEAD = load_font("DejaVuSans-Bold.ttf", 15)
+F_ITEM_DET = load_font("DejaVuSans.ttf", 12)
+F_FOOT = load_font("DejaVuSans.ttf", 13)
+
+_glyph_fonts = {}
+
+
+def glyph_font(size):
+    if size not in _glyph_fonts:
+        _glyph_fonts[size] = load_font("DejaVuSans-Bold.ttf", size)
+    return _glyph_fonts[size]
+
+
+def wrap_lines(text, fnt, width, limit):
+    """Greedy word wrap to at most `limit` lines of `width` pixels."""
+    words = text.split()
+    lines = []
+    current = ""
+    for word in words:
+        trial = f"{current} {word}".strip()
+        if fnt.getlength(trial) <= width:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            if len(lines) >= limit:
+                return lines
+            current = word
+    if current and len(lines) < limit:
+        lines.append(current)
+    return lines
+
+
+def wrap_first(text, fnt, first_width, rest_width, limit=2):
+    """Wrap where the first line is narrower (a region chip sits on it)."""
+    words = text.split()
+    lines = []
+    current = ""
+    width = first_width
+    for word in words:
+        trial = f"{current} {word}".strip()
+        if fnt.getlength(trial) <= width:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            if len(lines) >= limit:
+                return lines
+            current = word
+            width = rest_width
+    if current and len(lines) < limit:
+        lines.append(current)
+    return lines
+
+
+def squeeze(text, fnt, width):
+    """Shorten one line with an ellipsis until it fits `width` pixels."""
+    if fnt.getlength(text) <= width:
+        return text
+    cut = text
+    while cut and fnt.getlength(cut + "…") > width:
+        cut = cut[:-1]
+    return cut + "…"
+
+
+def paint_glyph(d, kind, cx, cy, r, ink):
+    """Draw one small pictogram centred on (cx, cy) inside radius r."""
+    w = max(2, int(r / 7))
+    thin = max(1, w - 1)
+    if kind == "missile":
+        d.polygon([(cx, cy - r), (cx - 0.32 * r, cy - 0.30 * r),
+                   (cx + 0.32 * r, cy - 0.30 * r)], fill=ink)
+        d.rectangle([cx - 0.32 * r, cy - 0.30 * r, cx + 0.32 * r, cy + 0.45 * r], fill=ink)
+        d.polygon([(cx - 0.32 * r, cy + 0.45 * r), (cx - 0.65 * r, cy + 0.78 * r),
+                   (cx - 0.32 * r, cy + 0.60 * r)], fill=ink)
+        d.polygon([(cx + 0.32 * r, cy + 0.45 * r), (cx + 0.65 * r, cy + 0.78 * r),
+                   (cx + 0.32 * r, cy + 0.60 * r)], fill=ink)
+        d.polygon([(cx - 0.18 * r, cy + 0.45 * r), (cx + 0.18 * r, cy + 0.45 * r),
+                   (cx, cy + 0.95 * r)], fill=HOT)
+    elif kind == "chart":
+        d.line([(cx - 0.70 * r, cy + 0.60 * r), (cx - 0.70 * r, cy - 0.60 * r)], fill=ink, width=w)
+        d.line([(cx - 0.70 * r, cy + 0.60 * r), (cx + 0.75 * r, cy + 0.60 * r)], fill=ink, width=w)
+        pts = [(cx - 0.58 * r, cy - 0.28 * r), (cx - 0.20 * r, cy + 0.12 * r),
+               (cx + 0.15 * r, cy - 0.12 * r), (cx + 0.60 * r, cy + 0.42 * r)]
+        d.line(pts, fill=ink, width=w, joint="curve")
+        d.polygon([(cx + 0.60 * r, cy + 0.42 * r), (cx + 0.32 * r, cy + 0.34 * r),
+                   (cx + 0.44 * r, cy + 0.62 * r)], fill=ink)
+    elif kind == "bitcoin":
+        d.ellipse([cx - 0.62 * r, cy - 0.62 * r, cx + 0.62 * r, cy + 0.62 * r],
+                  outline=ink, width=w)
+        d.text((cx, cy), "B", font=glyph_font(int(r * 1.05)), fill=ink, anchor="mm")
+    elif kind == "coin":
+        d.ellipse([cx - 0.62 * r, cy - 0.62 * r, cx + 0.62 * r, cy + 0.62 * r],
+                  outline=ink, width=w)
+        d.text((cx, cy), "€", font=glyph_font(int(r * 1.0)), fill=ink, anchor="mm")
+    elif kind == "probe":
+        d.ellipse([cx - 0.85 * r, cy - 0.32 * r, cx + 0.85 * r, cy + 0.32 * r],
+                  outline=ink, width=w)
+        d.ellipse([cx - 0.34 * r, cy - 0.34 * r, cx + 0.34 * r, cy + 0.34 * r], fill=ink)
+    elif kind == "seismo":
+        pts = [(cx - 0.80 * r, cy), (cx - 0.52 * r, cy), (cx - 0.36 * r, cy - 0.55 * r),
+               (cx - 0.16 * r, cy + 0.55 * r), (cx + 0.04 * r, cy - 0.40 * r),
+               (cx + 0.24 * r, cy + 0.28 * r), (cx + 0.40 * r, cy), (cx + 0.80 * r, cy)]
+        d.line(pts, fill=ink, width=w, joint="curve")
+    elif kind == "document":
+        d.rounded_rectangle([cx - 0.45 * r, cy - 0.60 * r, cx + 0.45 * r, cy + 0.60 * r],
+                            radius=int(r * 0.12), outline=ink, width=w)
+        for dy in (-0.28, 0.0, 0.28):
+            d.line([(cx - 0.28 * r, cy + dy * r), (cx + 0.28 * r, cy + dy * r)],
+                   fill=ink, width=thin)
+        d.ellipse([cx + 0.18 * r, cy + 0.22 * r, cx + 0.46 * r, cy + 0.50 * r], fill=HOT)
+    elif kind == "shield":
+        d.polygon([(cx, cy - 0.65 * r), (cx + 0.55 * r, cy - 0.40 * r),
+                   (cx + 0.55 * r, cy + 0.10 * r), (cx, cy + 0.70 * r),
+                   (cx - 0.55 * r, cy + 0.10 * r), (cx - 0.55 * r, cy - 0.40 * r)], fill=ink)
+        d.line([(cx - 0.28 * r, cy + 0.02 * r), (cx - 0.08 * r, cy + 0.24 * r),
+                (cx + 0.30 * r, cy - 0.24 * r)], fill=WHITE, width=w)
+    elif kind == "flag":
+        d.line([(cx - 0.30 * r, cy - 0.65 * r), (cx - 0.30 * r, cy + 0.70 * r)],
+               fill=ink, width=w)
+        d.polygon([(cx - 0.30 * r, cy - 0.65 * r), (cx + 0.68 * r, cy - 0.42 * r),
+                   (cx - 0.30 * r, cy - 0.15 * r)], fill=ink)
+    elif kind == "leaf":
+        d.polygon([(cx, cy - 0.65 * r), (cx + 0.50 * r, cy - 0.08 * r),
+                   (cx, cy + 0.65 * r), (cx - 0.50 * r, cy - 0.08 * r)], fill=ink)
+        d.line([(cx, cy - 0.48 * r), (cx, cy + 0.55 * r)], fill=CREAM, width=thin)
+    elif kind == "chip":
+        d.rectangle([cx - 0.45 * r, cy - 0.45 * r, cx + 0.45 * r, cy + 0.45 * r],
+                    outline=ink, width=w)
+        d.rectangle([cx - 0.20 * r, cy - 0.20 * r, cx + 0.20 * r, cy + 0.20 * r], fill=ink)
+        for s in (-0.22, 0.0, 0.22):
+            d.line([(cx + s * r, cy - 0.45 * r), (cx + s * r, cy - 0.65 * r)],
+                   fill=ink, width=thin)
+            d.line([(cx + s * r, cy + 0.45 * r), (cx + s * r, cy + 0.65 * r)],
+                   fill=ink, width=thin)
+            d.line([(cx - 0.45 * r, cy + s * r), (cx - 0.65 * r, cy + s * r)],
+                   fill=ink, width=thin)
+            d.line([(cx + 0.45 * r, cy + s * r), (cx + 0.65 * r, cy + s * r)],
+                   fill=ink, width=thin)
+    elif kind == "mic":
+        d.rounded_rectangle([cx - 0.26 * r, cy - 0.62 * r, cx + 0.26 * r, cy + 0.08 * r],
+                            radius=int(r * 0.26), fill=ink)
+        d.line([(cx - 0.26 * r, cy - 0.18 * r), (cx + 0.26 * r, cy - 0.18 * r)],
+               fill=CREAM, width=thin)
+        d.line([(cx - 0.26 * r, cy + 0.02 * r), (cx + 0.26 * r, cy + 0.02 * r)],
+               fill=CREAM, width=thin)
+        d.arc([cx - 0.46 * r, cy - 0.30 * r, cx + 0.46 * r, cy + 0.62 * r],
+              0, 180, fill=ink, width=w)
+        d.line([(cx, cy + 0.62 * r), (cx, cy + 0.82 * r)], fill=ink, width=w)
+    elif kind == "ballot":
+        d.rectangle([cx - 0.50 * r, cy - 0.50 * r, cx + 0.50 * r, cy + 0.50 * r],
+                    outline=ink, width=w)
+        d.line([(cx - 0.30 * r, cy + 0.04 * r), (cx - 0.08 * r, cy + 0.28 * r),
+                (cx + 0.34 * r, cy - 0.28 * r)], fill=ink, width=w)
+    elif kind == "flame":
+        d.polygon([(cx, cy - 0.70 * r), (cx + 0.34 * r, cy - 0.12 * r),
+                   (cx + 0.46 * r, cy + 0.22 * r), (cx + 0.20 * r, cy + 0.66 * r),
+                   (cx - 0.20 * r, cy + 0.66 * r), (cx - 0.46 * r, cy + 0.22 * r),
+                   (cx - 0.34 * r, cy - 0.12 * r)], fill=ink)
+        d.polygon([(cx, cy + 0.05 * r), (cx + 0.20 * r, cy + 0.30 * r),
+                   (cx, cy + 0.55 * r), (cx - 0.20 * r, cy + 0.30 * r)], fill=HOT)
+    elif kind == "pill":
+        d.rounded_rectangle([cx - 0.60 * r, cy - 0.28 * r, cx + 0.60 * r, cy + 0.28 * r],
+                            radius=int(r * 0.28), outline=ink, width=w)
+        d.line([(cx, cy - 0.28 * r), (cx, cy + 0.28 * r)], fill=ink, width=thin)
+        d.ellipse([cx - 0.52 * r, cy - 0.20 * r, cx - 0.08 * r, cy + 0.20 * r], fill=ink)
+    elif kind == "scales":
+        d.line([(cx, cy - 0.60 * r), (cx, cy + 0.62 * r)], fill=ink, width=w)
+        d.line([(cx - 0.62 * r, cy - 0.44 * r), (cx + 0.62 * r, cy - 0.44 * r)],
+               fill=ink, width=w)
+        for s in (-1, 1):
+            px = cx + s * 0.62 * r
+            d.line([(px, cy - 0.44 * r), (px - 0.16 * r, cy + 0.12 * r)],
+                   fill=ink, width=thin)
+            d.line([(px, cy - 0.44 * r), (px + 0.16 * r, cy + 0.12 * r)],
+                   fill=ink, width=thin)
+            d.arc([px - 0.24 * r, cy - 0.02 * r, px + 0.24 * r, cy + 0.34 * r],
+                  0, 180, fill=ink, width=thin)
+        d.line([(cx - 0.20 * r, cy + 0.62 * r), (cx + 0.20 * r, cy + 0.62 * r)],
+               fill=ink, width=w)
+    elif kind == "rocket":
+        d.polygon([(cx, cy - 0.68 * r), (cx - 0.30 * r, cy - 0.20 * r),
+                   (cx + 0.30 * r, cy - 0.20 * r)], fill=ink)
+        d.rectangle([cx - 0.30 * r, cy - 0.20 * r, cx + 0.30 * r, cy + 0.42 * r], fill=ink)
+        d.ellipse([cx - 0.13 * r, cy - 0.08 * r, cx + 0.13 * r, cy + 0.18 * r], fill=CREAM)
+        d.polygon([(cx - 0.30 * r, cy + 0.42 * r), (cx - 0.58 * r, cy + 0.68 * r),
+                   (cx - 0.30 * r, cy + 0.58 * r)], fill=ink)
+        d.polygon([(cx + 0.30 * r, cy + 0.42 * r), (cx + 0.58 * r, cy + 0.68 * r),
+                   (cx + 0.30 * r, cy + 0.58 * r)], fill=ink)
+        d.polygon([(cx - 0.16 * r, cy + 0.42 * r), (cx + 0.16 * r, cy + 0.42 * r),
+                   (cx, cy + 0.92 * r)], fill=HOT)
+    elif kind == "basketball":
+        d.ellipse([cx - 0.62 * r, cy - 0.62 * r, cx + 0.62 * r, cy + 0.62 * r],
+                  outline=ink, width=w)
+        d.line([(cx, cy - 0.62 * r), (cx, cy + 0.62 * r)], fill=ink, width=thin)
+        d.line([(cx - 0.62 * r, cy), (cx + 0.62 * r, cy)], fill=ink, width=thin)
+        d.arc([cx - 0.95 * r, cy - 0.45 * r, cx + 0.05 * r, cy + 0.45 * r],
+              300, 60, fill=ink, width=thin)
+        d.arc([cx - 0.05 * r, cy - 0.45 * r, cx + 0.95 * r, cy + 0.45 * r],
+              120, 240, fill=ink, width=thin)
+    elif kind == "building":
+        d.rectangle([cx - 0.40 * r, cy - 0.55 * r, cx + 0.40 * r, cy + 0.65 * r],
+                    outline=ink, width=w)
+        for row in range(4):
+            for col in range(3):
+                if row == 3 and col == 1:
+                    continue  # the door lives here
+                wx = cx - 0.28 * r + col * 0.28 * r
+                wy = cy - 0.42 * r + row * 0.26 * r
+                d.rectangle([wx, wy, wx + 0.12 * r, wy + 0.12 * r], fill=ink)
+        d.rectangle([cx - 0.10 * r, cy + 0.38 * r, cx + 0.10 * r, cy + 0.65 * r], fill=ink)
+    elif kind == "plane":
+        d.polygon([(cx - 0.75 * r, cy + 0.18 * r), (cx + 0.75 * r, cy - 0.38 * r),
+                   (cx + 0.12 * r, cy + 0.34 * r), (cx - 0.08 * r, cy + 0.04 * r)], fill=ink)
+        d.polygon([(cx - 0.10 * r, cy + 0.10 * r), (cx + 0.30 * r, cy + 0.62 * r),
+                   (cx + 0.02 * r, cy + 0.42 * r)], fill=ink)
+    elif kind == "bottle":
+        d.rectangle([cx - 0.16 * r, cy - 0.66 * r, cx + 0.16 * r, cy - 0.46 * r], fill=ink)
+        d.rectangle([cx - 0.18 * r, cy - 0.46 * r, cx + 0.18 * r, cy - 0.20 * r],
+                    outline=ink, width=thin)
+        d.rounded_rectangle([cx - 0.40 * r, cy - 0.20 * r, cx + 0.40 * r, cy + 0.66 * r],
+                            radius=int(r * 0.14), outline=ink, width=w)
+        d.line([(cx - 0.40 * r, cy + 0.28 * r), (cx + 0.40 * r, cy + 0.28 * r)],
+               fill=ink, width=thin)
+    elif kind == "gamepad":
+        d.rounded_rectangle([cx - 0.66 * r, cy - 0.36 * r, cx + 0.66 * r, cy + 0.36 * r],
+                            radius=int(r * 0.30), fill=ink)
+        d.rectangle([cx - 0.44 * r, cy - 0.05 * r, cx - 0.24 * r, cy + 0.05 * r], fill=CREAM)
+        d.rectangle([cx - 0.39 * r, cy - 0.10 * r, cx - 0.29 * r, cy + 0.10 * r], fill=CREAM)
+        d.ellipse([cx + 0.22 * r, cy - 0.16 * r, cx + 0.34 * r, cy - 0.04 * r], fill=CREAM)
+        d.ellipse([cx + 0.40 * r, cy + 0.02 * r, cx + 0.52 * r, cy + 0.14 * r], fill=CREAM)
+    elif kind == "gem":
+        d.polygon([(cx, cy - 0.60 * r), (cx + 0.55 * r, cy - 0.08 * r),
+                   (cx, cy + 0.66 * r), (cx - 0.55 * r, cy - 0.08 * r)], fill=ink)
+        d.line([(cx - 0.55 * r, cy - 0.08 * r), (cx + 0.55 * r, cy - 0.08 * r)],
+               fill=CREAM, width=thin)
+        d.line([(cx, cy - 0.60 * r), (cx, cy + 0.66 * r)], fill=CREAM, width=thin)
+    else:
+        d.ellipse([cx - 0.30 * r, cy - 0.30 * r, cx + 0.30 * r, cy + 0.30 * r], fill=ink)
+
 
 HEROES = [
-    dict(region="EU", headline="MISSILES LAND IN POLAND",
-         sub="Russian missiles fell in Poland. NATO calls it a grave violation.",
-         icon="missile"),
-    dict(region="GLOB", headline="STOCKS PLUNGE WORLDWIDE",
-         sub="S&P 500 fell 3.7% into correction. Nikkei -5.1% as AI shares sold off.",
-         icon="chart"),
-    dict(region="GLOB", headline="BITCOIN BELOW $60,000",
-         sub="First time since July. BTC closed at $58,952 after touching $57,778.",
-         icon="bitcoin"),
-    dict(region="GLOB", headline="BEPICOLOMBO REACHES MERCURY",
-         sub="After 8 years and 6bn miles, the probe arrives at Mercury.",
-         icon="mercury"),
-    dict(region="LATAM", headline="6.7 QUAKE SHAKES PERU",
-         sub="M6.7 in the central Andes at 7:09 p.m., felt in Lima. No casualties.",
-         icon="quake"),
-    dict(region="EU", headline="UK AND EU SEAL NEW DEALS",
-         sub="Food trade, carbon, youth mobility - the biggest Brexit reset yet.",
-         icon="deal"),
+    {"region": "EUROPE", "icon": "missile", "head": "MISSILES LAND IN POLAND",
+     "det": "Two missiles and a drone fell in Poland; NATO: grave violation."},
+    {"region": "GLOBAL", "icon": "chart", "head": "STOCKS PLUNGE WORLDWIDE",
+     "det": "S&P 500 -3.7% into correction; Nikkei -5.1% on AI sell-off."},
+    {"region": "GLOBAL", "icon": "bitcoin", "head": "BITCOIN BELOW $60,000",
+     "det": "First since July: BTC closed $58,952 after touching $57,778."},
+    {"region": "GLOBAL", "icon": "probe", "head": "BEPICOLOMBO REACHES MERCURY",
+     "det": "After 8 years and 6bn miles, the probe arrives at Mercury."},
+    {"region": "LATIN AMERICA", "icon": "seismo", "head": "6.7 QUAKE SHAKES PERU",
+     "det": "M6.7 in the Andes at 7:09 p.m.; felt in Lima, no deaths."},
+    {"region": "EUROPE", "icon": "document", "head": "UK AND EU SEAL NEW DEALS",
+     "det": "Food, carbon, youth mobility — biggest Brexit reset yet."},
 ]
 
-# dense items: (region, icon, headline, one-line detail)
-DENSE = [
-    ("EU", "missile", "KYIV BRIDGES HIT",
-     "Strikes hit 3 Dnipro bridges; 3 killed, ~15 hurt"),
-    ("EU", "flag", "BEAR TRAP: 14 VILLAGES RETAKEN",
-     "Ukraine says ~200 km\u00b2 freed in Kharkiv"),
-    ("EU", "shield", "DENMARK EXPELS RUSSIAN ATTACH\u00c9",
-     "Over alleged plot to kill rapper Kyivstoner"),
-    ("EU", "deal", "HUNGARY DROPS UKRAINE VETO",
-     "EU clears Kyiv's last two accession clusters"),
-    ("EU", "coin", "EU SENDS \u20ac8.9BN TO KYIV",
-     "\u20ac7.9bn aid plus \u20ac1bn for weapons, approved Fri"),
-    ("EU", "shield", "ESTONIA SHUTS RUSSIA BORDER",
-     "All road crossings closed from 1 Dec, 6 months"),
-    ("EU", "leaf", "COP31: NO FOSSIL-FUEL DEAL",
-     "Draft drops fossil-fuel language; talks overtime"),
-    ("NA", "chip", "NVIDIA PLUNGES 14%",
-     "SEC probes accounting; ~$500bn wiped in a day"),
-    ("NA", "chart", "ANTHROPIC SLIDES AFTER $81BN DEBUT",
-     "Shares fall the day after its record IPO"),
-    ("NA", "mic", "TRUMP CALLS PUTIN A \u201cFRIEND\u201d",
-     "Defends the word at White House presser"),
-    ("NA", "shield", "ICE & CBP: $41.7BN IN CONTRACTS",
-     "CNN: deportation spending surged in FY2026"),
-    ("NA", "ballot", "JUDGE WON'T BAN TRUMP ADS",
-     "Declines long-term ban on $20m DHS spots"),
-    ("NA", "flame", "PALISADES FIRE: GUILTY",
-     "Jury convicts man who started the 2025 blaze"),
-    ("NA", "pill", "MEASLES HITS 5,838 CASES",
-     "Worst US outbreak in decades, CDC says"),
-    ("NA", "scale", "BAYER'S $7.25BN ROUNDUP DEAL",
-     "Missouri judge approves the settlement"),
-    ("NA", "rocket", "SPACEX LAUNCHES USSF-317",
-     "Classified Space Force payload; booster lands"),
-    ("NA", "ball", "HARDEN PASSES KOBE",
-     "51 points; 3rd-most 50-point games in NBA"),
-    ("NA", "ballot", "BC'S FIRST CONSERVATIVE GOVT",
-     "Doerkson sworn in as premier after ~100 years"),
-    ("NA", "building", "NYC TO CLOSE RIKERS BY 2032",
-     "Mayor Mamdani releases first shutdown plan"),
-    ("LATAM", "plane", "US BACKS COLOMBIA COCA SPRAYING",
-     "State Dept backs return of aerial eradication"),
-    ("ASIA", "pill", "S. KOREA'S FIRST CHOLERA IN 10 YEARS",
-     "Case confirmed after a decade without one"),
-    ("ASIA", "chip", "TSMC HALTS CHINA CHIP ORDERS",
-     "New US rules force licence checks on 16nm"),
-    ("ASIA", "bottle", "TOXIC LIQUOR KILLS 11 IN MANIPUR",
-     "180+ hospitalised; CM confirms toll Friday"),
-    ("ME", "flame", "BLAST ON IRAN'S QESHM ISLAND",
-     "Reports flip from missile strike to munitions"),
-    ("ME", "plane", "SAUDI STRIKES HIT YEMEN PORT",
-     "Hodeidah hit; Houthis warn airlines off Saudi"),
-    ("AFR", "coin", "ANGOLA BUYS 10% OF DE BEERS",
-     "$180m stake in the diamond giant"),
-    ("AFR", "flag", "S. AFRICA MOURNS MLAMBO-NGCUKA",
-     "First woman deputy president dies at 71"),
-    ("GLOB", "gamepad", "GTA VI: $3.79BN IN ONE DAY",
-     "Biggest entertainment launch ever, say analysts"),
-    ("GLOB", "bitcoin", "BINANCE HACKERS MOVE $346M MORE",
-     "$594m in ETH shifted in two days via THORChain"),
+COLUMNS = [
+    [
+        {"region": "EUROPE", "icon": "missile", "head": "KYIV BRIDGES HIT",
+         "det": "3 Dnipro bridges hit; 3 killed, ~15 hurt"},
+        {"region": "EUROPE", "icon": "flag", "head": "BEAR TRAP: 14 VILLAGES RETAKEN",
+         "det": "Ukraine says ~200 km² freed in Kharkiv"},
+        {"region": "EUROPE", "icon": "shield", "head": "DENMARK EXPELS RUSSIAN ATTACHÉ",
+         "det": "Over alleged plot to kill rapper Kyivstoner"},
+        {"region": "EUROPE", "icon": "document", "head": "HUNGARY DROPS UKRAINE VETO",
+         "det": "EU clears Kyiv's last two accession clusters"},
+        {"region": "EUROPE", "icon": "coin", "head": "EU SENDS €8.9BN TO KYIV",
+         "det": "€7.9bn aid + €1bn weapons, approved Fri"},
+        {"region": "EUROPE", "icon": "shield", "head": "ESTONIA SHUTS RUSSIA BORDER",
+         "det": "All crossings closed from 1 Dec, 6 months"},
+        {"region": "EUROPE", "icon": "leaf", "head": "COP31: NO FOSSIL-FUEL DEAL",
+         "det": "Draft drops fossil-fuel text; talks overtime"},
+        {"region": "LATIN AMERICA", "icon": "plane", "head": "US BACKS COLOMBIA COCA SPRAYING",
+         "det": "State Dept backs return of aerial eradication"},
+        {"region": "AFRICA", "icon": "gem", "head": "ANGOLA BUYS 10% OF DE BEERS",
+         "det": "$180m stake in the diamond giant"},
+        {"region": "AFRICA", "icon": "flag", "head": "S. AFRICA MOURNS MLAMBO-NGCUKA",
+         "det": "First woman deputy president dies at 71"},
+    ],
+    [
+        {"region": "N. AMERICA", "icon": "chip", "head": "NVIDIA PLUNGES 14%",
+         "det": "SEC probes accounting; ~$500bn wiped"},
+        {"region": "N. AMERICA", "icon": "chart", "head": "ANTHROPIC SLIDES AFTER $81BN DEBUT",
+         "det": "Shares fall the day after its record IPO"},
+        {"region": "N. AMERICA", "icon": "mic", "head": "TRUMP CALLS PUTIN A “FRIEND”",
+         "det": "Defends the word at White House presser"},
+        {"region": "N. AMERICA", "icon": "shield", "head": "ICE & CBP: $41.7BN IN CONTRACTS",
+         "det": "CNN: deportation spending surged in FY2026"},
+        {"region": "N. AMERICA", "icon": "ballot", "head": "JUDGE WON'T BAN TRUMP ADS",
+         "det": "Declines long-term ban on $20m DHS spots"},
+        {"region": "N. AMERICA", "icon": "flame", "head": "PALISADES FIRE: GUILTY",
+         "det": "Jury convicts man who started the 2025 blaze"},
+        {"region": "N. AMERICA", "icon": "pill", "head": "MEASLES HITS 5,838 CASES",
+         "det": "Worst US outbreak in decades, CDC says"},
+        {"region": "N. AMERICA", "icon": "scales", "head": "BAYER'S $7.25BN ROUNDUP DEAL",
+         "det": "Missouri judge approves the settlement"},
+        {"region": "N. AMERICA", "icon": "rocket", "head": "SPACEX LAUNCHES USSF-317",
+         "det": "Classified Space Force payload; booster lands"},
+        {"region": "N. AMERICA", "icon": "basketball", "head": "HARDEN PASSES KOBE",
+         "det": "51 points; 3rd-most 50-point games in NBA"},
+    ],
+    [
+        {"region": "N. AMERICA", "icon": "ballot", "head": "BC'S FIRST CONSERVATIVE GOVT",
+         "det": "Doerkson sworn in as premier after ~100 years"},
+        {"region": "N. AMERICA", "icon": "building", "head": "NYC TO CLOSE RIKERS BY 2032",
+         "det": "Mayor Mamdani releases first shutdown plan"},
+        {"region": "ASIA", "icon": "pill", "head": "S. KOREA'S FIRST CHOLERA IN 10 YEARS",
+         "det": "Case confirmed after a decade without one"},
+        {"region": "ASIA", "icon": "chip", "head": "TSMC HALTS CHINA CHIP ORDERS",
+         "det": "New US rules force licence checks on 16nm"},
+        {"region": "ASIA", "icon": "bottle", "head": "TOXIC LIQUOR KILLS 11 IN MANIPUR",
+         "det": "180+ hospitalised; CM confirms toll Friday"},
+        {"region": "MIDDLE EAST", "icon": "flame", "head": "BLAST ON IRAN'S QESHM ISLAND",
+         "det": "Reports flip from missile strike to munitions"},
+        {"region": "MIDDLE EAST", "icon": "plane", "head": "SAUDI STRIKES HIT YEMEN PORT",
+         "det": "Hodeidah hit; Houthis warn airlines off Saudi"},
+        {"region": "GLOBAL", "icon": "gamepad", "head": "GTA VI: $3.79BN IN ONE DAY",
+         "det": "Biggest entertainment launch ever"},
+        {"region": "GLOBAL", "icon": "bitcoin", "head": "BINANCE HACKERS MOVE $346M MORE",
+         "det": "$594m in ETH shifted in two days"},
+    ],
 ]
 
-# column assignment for the dense area (balanced counts 10/10/9)
-DENSE_COLS = [
-    DENSE[0:7] + DENSE[19:20] + DENSE[25:27],    # EU 7 + LATAM 1 + AFRICA 2 = 10
-    DENSE[7:17],                                  # NA 10
-    DENSE[17:19] + DENSE[20:25] + DENSE[27:29],   # NA 2 + ASIA 3 + ME 2 + GLOB 2 = 9
-]
 
-# ---------------------------------------------------------------- helpers
-def wrap(draw, text, fnt, max_w):
-    """Greedy word wrap; returns list of lines."""
-    words = text.split()
-    lines, cur = [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if draw.textlength(trial, font=fnt) <= max_w:
-            cur = trial
-        else:
-            if cur:
-                lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
-    return lines
-
-
-def star_points(cx, cy, r_out, r_in, n=5, rot=-90):
-    pts = []
-    for i in range(2 * n):
-        r = r_out if i % 2 == 0 else r_in
-        a = math.radians(rot + i * 180.0 / n)
-        pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
-    return pts
-
-
-# ---------------------------------------------------------------- icons
-# Each draws a pictogram into a 96x96 layer (same coordinate space).
-
-def icon_missile(d):
-    d.polygon([(43, 72), (53, 72), (48, 90)], fill=(230, 126, 34))
-    d.polygon([(45, 72), (51, 72), (48, 82)], fill=(241, 196, 15))
-    d.polygon([(40, 56), (27, 74), (40, 70)], fill=(44, 62, 80))
-    d.polygon([(56, 56), (69, 74), (56, 70)], fill=(44, 62, 80))
-    d.rounded_rectangle([40, 16, 56, 72], radius=6, fill=(93, 109, 126))
-    d.polygon([(40, 18), (56, 18), (48, 4)], fill=(176, 58, 46))
-    d.ellipse([43, 30, 53, 40], fill=(174, 214, 241), outline=(44, 62, 80), width=2)
-
-
-def icon_chart(d):
-    d.line([(14, 84), (14, 14)], fill=(44, 62, 80), width=4)
-    d.line([(14, 84), (86, 84)], fill=(44, 62, 80), width=4)
-    pts = [(20, 28), (33, 40), (45, 36), (58, 54), (70, 50), (82, 70)]
-    d.line(pts, fill=(176, 58, 46), width=5, joint="curve")
-    d.polygon([(82, 70), (70, 66), (78, 80)], fill=(176, 58, 46))
-
-
-def icon_bitcoin(d):
-    d.ellipse([8, 8, 88, 88], fill=(247, 147, 26), outline=(185, 106, 0), width=3)
-    f = font(NOTO_BOLD, 56)
-    d.text((48, 48), "B", font=f, fill=(255, 255, 255), anchor="mm")
-    d.rectangle([37, 20, 41, 76], fill=(255, 255, 255))
-    d.rectangle([53, 20, 57, 76], fill=(255, 255, 255))
-
-
-def icon_mercury(d):
-    d.ellipse([10, 34, 66, 90], fill=(176, 169, 159), outline=(138, 131, 120), width=3)
-    for (x, y, r) in [(26, 50, 6), (44, 66, 8), (30, 74, 4), (50, 46, 4)]:
-        d.ellipse([x - r, y - r, x + r, y + r], fill=(138, 131, 120))
-    d.rectangle([56, 14, 62, 28], fill=(36, 113, 163))
-    d.rectangle([80, 14, 86, 28], fill=(36, 113, 163))
-    d.rectangle([62, 10, 80, 32], fill=(234, 242, 248), outline=(44, 62, 80), width=2)
-    d.line([(71, 32), (60, 46)], fill=(44, 62, 80), width=2)
-
-
-def icon_quake(d):
-    pts = [(8, 62), (20, 62), (26, 34), (34, 62), (42, 62), (48, 24),
-           (56, 62), (64, 62), (70, 46), (78, 62), (88, 62)]
-    d.line(pts, fill=(146, 43, 33), width=4, joint="curve")
-    d.line([(8, 78), (88, 78)], fill=(44, 62, 80), width=3)
-
-
-def icon_deal(d):
-    d.rounded_rectangle([20, 12, 68, 84], radius=4, fill=(255, 255, 255),
-                        outline=(44, 62, 80), width=3)
-    d.polygon([(56, 12), (68, 24), (56, 24)], fill=(213, 216, 220))
-    for y in (36, 46, 56):
-        d.line([(28, y), (52, y)], fill=(93, 109, 126), width=4)
-    d.ellipse([56, 60, 82, 86], fill=(176, 58, 46), outline=(146, 43, 33), width=2)
-    d.polygon(star_points(69, 73, 7, 3), fill=(241, 196, 15))
-
-
-def icon_flag(d):
-    d.line([(22, 12), (22, 86)], fill=(44, 62, 80), width=5)
-    d.polygon([(26, 14), (78, 26), (26, 44)], fill=(176, 58, 46))
-    d.polygon(star_points(42, 28, 7, 3), fill=(255, 255, 255))
-
-
-def icon_shield(d):
-    d.polygon([(48, 8), (82, 20), (82, 50), (48, 88), (14, 50), (14, 20)],
-              fill=(36, 113, 163), outline=(26, 82, 118), width=3)
-    d.line([(32, 48), (44, 60), (66, 34)], fill=(255, 255, 255), width=6,
-           joint="curve")
-
-
-def icon_coin(d):
-    d.ellipse([12, 12, 84, 84], fill=(241, 196, 15), outline=(185, 119, 14), width=3)
-    d.polygon([(48, 26), (66, 48), (48, 70), (30, 48)], fill=(255, 255, 255))
-    d.polygon([(48, 34), (58, 48), (48, 62), (38, 48)], fill=(241, 196, 15))
-
-
-def icon_leaf(d):
-    d.polygon([(48, 10), (82, 34), (76, 76), (40, 88), (16, 52)],
-              fill=(39, 174, 96), outline=(17, 120, 100), width=3)
-    d.line([(48, 14), (48, 84)], fill=(17, 120, 100), width=3)
-    d.line([(48, 40), (66, 30)], fill=(17, 120, 100), width=2)
-    d.line([(48, 58), (30, 48)], fill=(17, 120, 100), width=2)
-
-
-def icon_chip(d):
-    d.rounded_rectangle([26, 26, 70, 70], radius=6, fill=(44, 62, 80))
-    d.rounded_rectangle([38, 38, 58, 58], radius=3, fill=(174, 214, 241))
-    for x in (34, 48, 62):
-        d.line([(x, 14), (x, 26)], fill=(44, 62, 80), width=4)
-        d.line([(x, 70), (x, 82)], fill=(44, 62, 80), width=4)
-    for y in (34, 48, 62):
-        d.line([(14, y), (26, y)], fill=(44, 62, 80), width=4)
-        d.line([(70, y), (82, y)], fill=(44, 62, 80), width=4)
-
-
-def icon_mic(d):
-    d.rounded_rectangle([36, 10, 60, 52], radius=14, fill=(44, 62, 80))
-    d.line([(48, 14), (48, 44)], fill=(174, 214, 241), width=3)
-    d.arc([28, 40, 68, 76], 0, 180, fill=(44, 62, 80), width=5)
-    d.line([(48, 76), (48, 88)], fill=(44, 62, 80), width=5)
-    d.line([(36, 88), (60, 88)], fill=(44, 62, 80), width=5)
-
-
-def icon_ballot(d):
-    d.rounded_rectangle([16, 16, 80, 84], radius=6, fill=(255, 255, 255),
-                        outline=(44, 62, 80), width=3)
-    d.line([(28, 52), (40, 64), (62, 34)], fill=(39, 174, 96), width=7,
-           joint="curve")
-    d.line([(28, 28), (52, 28)], fill=(93, 109, 126), width=4)
-
-
-def icon_flame(d):
-    d.polygon([(48, 8), (66, 36), (78, 52), (72, 76), (48, 90), (24, 76),
-               (18, 52), (32, 34)], fill=(230, 126, 34))
-    d.polygon([(48, 40), (60, 56), (56, 74), (48, 82), (40, 74), (36, 56)],
-              fill=(241, 196, 15))
-
-
-def icon_pill(d):
-    d.rounded_rectangle([18, 34, 78, 62], radius=14, fill=(255, 255, 255),
-                        outline=(176, 58, 46), width=3)
-    d.rounded_rectangle([18, 34, 48, 62], radius=14, fill=(176, 58, 46))
-    d.rectangle([44, 34, 48, 62], fill=(176, 58, 46))
-    d.ellipse([60, 70, 72, 82], fill=(36, 113, 163))
-    d.ellipse([70, 76, 78, 84], fill=(36, 113, 163))
-
-
-def icon_scale(d):
-    d.line([(48, 12), (48, 80)], fill=(44, 62, 80), width=5)
-    d.line([(20, 22), (76, 22)], fill=(44, 62, 80), width=5)
-    d.line([(20, 22), (12, 52)], fill=(44, 62, 80), width=3)
-    d.line([(20, 22), (28, 52)], fill=(44, 62, 80), width=3)
-    d.line([(76, 22), (68, 52)], fill=(44, 62, 80), width=3)
-    d.line([(76, 22), (84, 52)], fill=(44, 62, 80), width=3)
-    d.polygon([(8, 52), (32, 52), (20, 64)], fill=(212, 172, 13))
-    d.polygon([(64, 52), (88, 52), (76, 64)], fill=(212, 172, 13))
-    d.line([(32, 80), (64, 80)], fill=(44, 62, 80), width=5)
-
-
-def icon_rocket(d):
-    d.polygon([(43, 74), (53, 74), (48, 92)], fill=(230, 126, 34))
-    d.polygon([(45, 74), (51, 74), (48, 84)], fill=(241, 196, 15))
-    d.polygon([(38, 58), (26, 76), (38, 72)], fill=(176, 58, 46))
-    d.polygon([(58, 58), (70, 76), (58, 72)], fill=(176, 58, 46))
-    d.rounded_rectangle([38, 14, 58, 74], radius=8, fill=(234, 242, 248),
-                        outline=(44, 62, 80), width=2)
-    d.polygon([(38, 16), (58, 16), (48, 4)], fill=(176, 58, 46))
-    d.ellipse([42, 28, 54, 40], fill=(174, 214, 241), outline=(44, 62, 80), width=2)
-
-
-def icon_ball(d):
-    d.ellipse([10, 10, 86, 86], fill=(230, 126, 34), outline=(146, 43, 33), width=3)
-    d.line([(10, 48), (86, 48)], fill=(146, 43, 33), width=3)
-    d.line([(48, 10), (48, 86)], fill=(146, 43, 33), width=3)
-    d.arc([10, 10, 70, 70], 270, 90, fill=(146, 43, 33), width=3)
-    d.arc([26, 26, 86, 86], 90, 270, fill=(146, 43, 33), width=3)
-
-
-def icon_building(d):
-    d.rectangle([22, 26, 74, 86], fill=(93, 109, 126), outline=(44, 62, 80), width=3)
-    d.rectangle([40, 66, 56, 86], fill=(44, 62, 80))
-    for (x, y) in [(30, 34), (46, 34), (62, 34), (30, 50), (46, 50), (62, 50)]:
-        d.rectangle([x, y, x + 8, y + 8], fill=(241, 196, 15))
-    d.polygon([(18, 26), (78, 26), (48, 10)], fill=(176, 58, 46))
-
-
-def icon_plane(d):
-    d.polygon([(48, 12), (58, 34), (54, 50), (48, 50), (42, 50), (38, 34)],
-              fill=(44, 62, 80))
-    d.polygon([(40, 40), (12, 62), (40, 56)], fill=(93, 109, 126))
-    d.polygon([(56, 40), (84, 62), (56, 56)], fill=(93, 109, 126))
-    d.polygon([(44, 50), (52, 50), (56, 70), (48, 78), (40, 70)],
-              fill=(44, 62, 80))
-    d.ellipse([44, 22, 52, 30], fill=(174, 214, 241))
-
-
-def icon_bottle(d):
-    d.rectangle([42, 10, 54, 26], fill=(36, 113, 163))
-    d.polygon([(42, 26), (54, 26), (62, 40), (34, 40)], fill=(36, 113, 163))
-    d.rounded_rectangle([30, 40, 66, 86], radius=8, fill=(174, 214, 241),
-                        outline=(26, 82, 118), width=3)
-    d.rectangle([38, 52, 58, 72], fill=(255, 255, 255))
-
-
-def icon_gamepad(d):
-    d.rounded_rectangle([12, 30, 84, 68], radius=12, fill=(44, 62, 80))
-    d.polygon([(24, 40), (28, 40), (28, 36), (32, 36), (32, 40), (36, 40),
-               (36, 44), (32, 44), (32, 48), (28, 48), (28, 44), (24, 44)],
-              fill=(255, 255, 255))
-    d.ellipse([60, 40, 68, 48], fill=(241, 196, 15))
-    d.ellipse([68, 48, 76, 56], fill=(176, 58, 46))
-
-
-ICONS = {
-    "missile": icon_missile, "chart": icon_chart, "bitcoin": icon_bitcoin,
-    "mercury": icon_mercury, "quake": icon_quake, "deal": icon_deal,
-    "flag": icon_flag, "shield": icon_shield, "coin": icon_coin,
-    "leaf": icon_leaf, "chip": icon_chip, "mic": icon_mic,
-    "ballot": icon_ballot, "flame": icon_flame, "pill": icon_pill,
-    "scale": icon_scale, "rocket": icon_rocket, "ball": icon_ball,
-    "building": icon_building, "plane": icon_plane, "bottle": icon_bottle,
-    "gamepad": icon_gamepad,
-}
-
-
-def draw_icon(base, cx, cy, name, tint, size=96):
-    layer = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    d.ellipse([2, 2, 94, 94], fill=tint + (255,))
-    ICONS[name](d)
-    if size != 96:
-        layer = layer.resize((size, size), Image.LANCZOS)
-    base.alpha_composite(layer, (cx - size // 2, cy - size // 2))
-
-
-def wrap_first(draw, text, fnt, w_first, w_rest):
-    """Wrap with a narrower first line (room for a tag chip), then full width."""
-    words = text.split()
-    lines, cur, w = [], "", w_first
-    for wd in words:
-        trial = (cur + " " + wd).strip()
-        if draw.textlength(trial, font=fnt) <= w:
-            cur = trial
-        else:
-            if cur:
-                lines.append(cur)
-            cur = wd
-            w = w_rest
-    if cur:
-        lines.append(cur)
-    return lines
-
-
-# ---------------------------------------------------------------- build
-def main():
-    img = Image.new("RGBA", (W, H), PAPER + (255,))
-    d = ImageDraw.Draw(img, "RGBA")
-
-    # ---- header band
-    d.rectangle([0, 0, W, 112], fill=NAVY)
-    d.rectangle([0, 112, W, 116], fill=GOLD)
-    f_kick = font(NOTO_BOLD, 18)
-    d.text((24, 12), "THE WORLD IN ONE DAY", font=f_kick, fill=(232, 184, 75))
-    f_date = font(ANTON, 50)
-    d.text((24, 34), "20 NOVEMBER 2026", font=f_date, fill=(255, 255, 255))
-    tag = "FRIDAY"
-    f_tag = font(NOTO_BOLD, 22)
-    tw = d.textlength(tag, font=f_tag)
-    d.rounded_rectangle([W - 24 - tw - 32, 20, W - 24, 20 + 44], radius=9,
-                        fill=(192, 57, 43))
-    d.text((W - 24 - tw - 16, 42), tag, font=f_tag, fill=(255, 255, 255),
-           anchor="lm")
-    f_count = font(NOTO_BOLD, 18)
-    d.text((W - 24, 88), "35 STORIES  ·  7 REGIONS", font=f_count,
-           fill=(232, 184, 75), anchor="ra")
-
-    # ---- hero cards (6, 3x2)
-    margin, gutter = 24, 14
-    col_w = (W - 2 * margin - 2 * gutter) // 3
-    hero_top, hero_h, hero_gap = 128, 136, 10
-    f_hkick = font(NOTO_BOLD, 12)
-    f_hhead = font(ANTON, 20)
-    f_hsub = font(NOTO, 12)
-
-    for i, s in enumerate(HEROES):
-        col, row = i % 3, i // 3
-        x0 = margin + col * (col_w + gutter)
-        y0 = hero_top + row * (hero_h + hero_gap)
-        x1, y1 = x0 + col_w, y0 + hero_h
-        label, color, tint = REGIONS[s["region"]]
-
-        d.rounded_rectangle([x0, y0, x1, y1], radius=10, fill=CARD,
-                            outline=CARD_EDGE, width=2)
-        d.rounded_rectangle([x0, y0, x1, y0 + 6], radius=3, fill=color)
-        d.rectangle([x0, y0 + 3, x1, y0 + 6], fill=color)
-
-        draw_icon(img, x0 + 42, y0 + 68, s["icon"], tint, size=66)
-
-        tx = x0 + 84
-        tw_text = x1 - 12 - tx
-        d.text((tx, y0 + 12), label, font=f_hkick, fill=color)
-        head_lines = wrap(d, s["headline"], f_hhead, tw_text)[:2]
-        hy = y0 + 30
-        for ln in head_lines:
-            d.text((tx, hy), ln, font=f_hhead, fill=INK)
-            hy += 23
-        sub_lines = wrap(d, s["sub"], f_hsub, tw_text)[:2]
-        sy = hy + 5
-        for ln in sub_lines:
-            d.text((tx, sy), ln, font=f_hsub, fill=SUB)
-            sy += 15
-
-    # ---- dense section strip
-    strip_y = 420
-    f_strip = font(NOTO_BOLD, 16)
-    d.text((24, strip_y), "THE REST OF THE DAY \u2014 29 MORE STORIES",
-           font=f_strip, fill=INK)
-    # region legend, right aligned
-    f_leg = font(NOTO_BOLD, 10)
-    lx = W - 24
-    for key in reversed(list(REGIONS)):
-        label, color, _t = REGIONS[key]
-        wlab = d.textlength(label, font=f_leg)
-        lx -= wlab
-        d.text((lx, strip_y + 3), label, font=f_leg, fill=color)
-        lx -= 14
-        d.ellipse([lx, strip_y + 5, lx + 9, strip_y + 14], fill=color)
-        lx -= 12
-    d.line([(24, strip_y + 26), (W - 24, strip_y + 26)], fill=CARD_EDGE, width=2)
-
-    # ---- dense columns
-    dense_top, dense_bottom = 456, 978
-    f_tag = font(NOTO_BOLD, 9)
-    f_head = font(NOTO_BOLD, 13)
-    f_det = font(NOTO, 11)
-    item_gap = 14
-    col_x = [margin + c * (col_w + gutter) for c in range(3)]
-
-    # 2-letter region codes for the inline tag chips (full names in legend)
-    CODE = {"EU": "EU", "NA": "NA", "LATAM": "LA", "ASIA": "AS",
-            "ME": "ME", "AFR": "AF", "GLOB": "GL"}
-
-    for c, items in enumerate(DENSE_COLS):
-        x0 = col_x[c]
-        y = dense_top
-        for (region, icon, headline, detail) in items:
-            label, color, tint = REGIONS[region]
-            draw_icon(img, x0 + 19, y + 19, icon, tint, size=38)
-            tx = x0 + 44
-            tw_text = x0 + col_w - 4 - tx
-            # region tag chip (2-letter code) + headline, wrapped so the
-            # first line leaves room for the chip
-            code = CODE[region]
-            chip_w = d.textlength(code, font=f_tag) + 10
-            head_lines = wrap_first(d, headline, f_head,
-                                    tw_text - chip_w - 6, tw_text)[:2]
-            d.rounded_rectangle([tx, y + 1, tx + chip_w, y + 15], radius=4,
-                                fill=color)
-            d.text((tx + 5, y + 8), code, font=f_tag, fill=(255, 255, 255),
-                   anchor="lm")
-            hy = y
-            d.text((tx + chip_w + 6, hy), head_lines[0], font=f_head, fill=INK)
-            hy += 16
-            for ln in head_lines[1:]:
-                d.text((tx, hy), ln, font=f_head, fill=INK)
-                hy += 16
-            # detail line
-            det = detail
-            while d.textlength(det + "\u2026", font=f_det) > tw_text and len(det) > 10:
-                det = det[:-1]
-            if det != detail:
-                det += "\u2026"
-            d.text((tx, hy), det, font=f_det, fill=SUB)
-            y = hy + 13 + item_gap
-        print("column", c, "ends at y =", y)
-        assert y <= dense_bottom, "dense column %d overflows: %d" % (c, y)
-
-    # ---- footer
-    f_foot = font(NOTO, 12)
-    d.text((W // 2, 992),
-           "All 35 events happened or were first reported on Friday, 20 November 2026.",
-           font=f_foot, fill=SUB, anchor="mm")
-    f_foot2 = font(NOTO, 11)
-    d.text((W // 2, 1010),
-           "Sources: AP \u00b7 Reuters \u00b7 BBC \u00b7 The Guardian \u00b7 CNN \u00b7 USGS \u00b7 CDC \u00b7 nyc.gov \u00b7 Euronews \u2014 full list in README. Drawn in code; no photographs.",
-           font=f_foot2, fill=SUB, anchor="mm")
-
-    img.convert("RGB").save(OUT, "PNG", optimize=True)
-    print("wrote", OUT, img.size, os.path.getsize(OUT), "bytes")
+def paint_header(d):
+    d.rectangle([0, 0, IMG_W, 112], fill=NAVY)
+    d.text((SIDE, 14), "THE WORLD IN ONE DAY", font=F_KICK, fill=GOLD)
+    d.text((SIDE, 38), "20 NOVEMBER 2026", font=F_TITLE, fill=WHITE)
+    pill = "FRIDAY"
+    pw = F_PILL.getlength(pill)
+    x0 = IMG_W - SIDE - pw - 36
+    d.rounded_rectangle([x0, 18, IMG_W - SIDE, 58], radius=20, fill=RED)
+    d.text((x0 + 18, 27), pill, font=F_PILL, fill=WHITE)
+    stats = "35 STORIES · 7 REGIONS"
+    sw = F_STATS.getlength(stats)
+    d.text((IMG_W - SIDE - sw, 78), stats, font=F_STATS, fill=GOLD)
+    d.rectangle([0, 112, IMG_W, 116], fill=GOLD)
+
+
+def paint_hero(d, story, x, y, w, h):
+    col = REGIONS[story["region"]]["color"]
+    ink, tint = STYLE[story["icon"]]
+    d.rounded_rectangle([x, y, x + w, y + h], radius=10, fill=WHITE)
+    d.rounded_rectangle([x, y, x + w, y + 8], radius=10, fill=col)
+    d.rectangle([x, y + 4, x + w, y + 8], fill=col)
+    d.rounded_rectangle([x, y, x + w, y + h], radius=10, outline=EDGE, width=1)
+    cx, cy = x + 40, y + 70
+    d.ellipse([cx - 27, cy - 27, cx + 27, cy + 27], fill=tint)
+    paint_glyph(d, story["icon"], cx, cy, 19, ink)
+    tx = x + 80
+    tw = w - 80 - 12
+    d.text((tx, y + 16), story["region"], font=F_REGION, fill=col)
+    hy = y + 38
+    for line in wrap_lines(story["head"], F_HERO_HEAD, tw, 2):
+        d.text((tx, hy), line, font=F_HERO_HEAD, fill=INK)
+        hy += 24
+    dy = y + 90
+    for line in wrap_lines(story["det"], F_HERO_DET, tw, 2):
+        d.text((tx, dy), line, font=F_HERO_DET, fill=GRAY)
+        dy += 17
+
+
+def paint_divider(d, y):
+    title = "THE REST OF THE DAY — 29 MORE STORIES"
+    d.text((SIDE, y), title, font=F_SECTION, fill=INK)
+    spans = []
+    total = 0
+    for name in REGION_ORDER:
+        w = F_LEGEND.getlength(name)
+        spans.append((name, w))
+        total += 8 + 3 + w + 6
+    total -= 6
+    title_end = SIDE + F_SECTION.getlength(title)
+    x = max(IMG_W - SIDE - total, title_end + 12)
+    for name, w in spans:
+        col = REGIONS[name]["color"]
+        d.ellipse([x, y + 3, x + 8, y + 11], fill=col)
+        d.text((x + 11, y + 2), name, font=F_LEGEND, fill=INK)
+        x += 11 + w + 6
+
+
+def paint_item(d, story, x, y, w):
+    col = REGIONS[story["region"]]["color"]
+    ink, tint = STYLE[story["icon"]]
+    d.ellipse([x, y + 4, x + 36, y + 40], fill=tint)
+    paint_glyph(d, story["icon"], x + 18, y + 22, 12, ink)
+    tx = x + 46
+    tw = w - 46
+    code = REGIONS[story["region"]]["code"]
+    cw = F_CHIP.getlength(code)
+    d.text((tx, y + 3), code, font=F_CHIP, fill=col)
+    lines = wrap_first(story["head"], F_ITEM_HEAD, tw - cw - 8, tw, 2)
+    d.text((tx + cw + 8, y + 1), lines[0], font=F_ITEM_HEAD, fill=INK)
+    if len(lines) > 1:
+        d.text((tx, y + 18), lines[1], font=F_ITEM_HEAD, fill=INK)
+    d.text((tx, y + 35), squeeze(story["det"], F_ITEM_DET, tw),
+           font=F_ITEM_DET, fill=GRAY)
+
+
+def paint_footer(d):
+    line1 = "All 35 events happened or were first reported on Friday, 20 November 2026."
+    line2 = ("Sources: AP · Reuters · BBC · The Guardian · CNN · USGS · CDC · nyc.gov · "
+             "Euronews — full list in README. Drawn in code; no photographs.")
+    for i, line in enumerate((line1, line2)):
+        w = F_FOOT.getlength(line)
+        d.text(((IMG_W - w) / 2, 968 + i * 22), line, font=F_FOOT, fill=GRAY)
+
+
+def build():
+    img = Image.new("RGB", (IMG_W, IMG_H), CREAM)
+    d = ImageDraw.Draw(img)
+    paint_header(d)
+    cell_w = (IMG_W - 2 * SIDE - 2 * COL_GAP) // 3
+    cell_h = 140
+    for i, story in enumerate(HEROES):
+        row, col_i = divmod(i, 3)
+        x = SIDE + col_i * (cell_w + COL_GAP)
+        y = 132 + row * (cell_h + COL_GAP)
+        paint_hero(d, story, x, y, cell_w, cell_h)
+    paint_divider(d, 442)
+    for c, column in enumerate(COLUMNS):
+        x = SIDE + c * (cell_w + COL_GAP)
+        for r, story in enumerate(column):
+            paint_item(d, story, x, 478 + r * 48, cell_w)
+    paint_footer(d)
+    img.save(TARGET_PNG, "PNG")
+    print(f"wrote {TARGET_PNG}")
 
 
 if __name__ == "__main__":
-    main()
+    build()

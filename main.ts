@@ -1,16 +1,22 @@
-// Entry program for make.fun news-image-20261120 (Node 22, stdlib only).
+// News Image 20 Nov 2026 — entrypoint.
 //
-// The image is drawn in code by draw_image.py (PIL) and ships in this
-// repository as entry.png: one 1024x1024 picture summing up the world
-// news of Friday 20 November 2026. This program just copies it to the
-// output directory, so both grader runs write identical bytes.
-//
-// Local run:  mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// The grader runs this file at the repository root. Its job is to place the
+// finished picture (entry.png) into the output folder the harness provides,
+// so the graded run can find it there.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 
-import { copyFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+const artworkName = "entry.png";
+const fallbackDir = "/output";
+const destinationDir = process.env.MAKEFUN_OUTPUT_DIR || fallbackDir;
+const artworkPath = resolve(process.cwd(), artworkName);
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-// The grader's /output already exists; creating it is only for local runs.
-mkdirSync(outDir, { recursive: true });
-copyFileSync(new URL('./entry.png', import.meta.url), join(outDir, 'entry.png'));
+if (!existsSync(artworkPath)) {
+  throw new Error(`missing artwork: ${artworkPath}`);
+}
+
+mkdirSync(destinationDir, { recursive: true });
+const pixels = readFileSync(artworkPath);
+const destination = join(destinationDir, artworkName);
+writeFileSync(destination, pixels);
+console.log(`wrote ${destination}`);
